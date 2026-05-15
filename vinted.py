@@ -3,7 +3,8 @@ from curl_cffi import requests as cffi_requests
 from config import (
     VINTED_COOKIE, MIN_PRICE, MAX_PRICE,
     GOOD_CONDITIONS, BAD_TITLE_KEYWORDS,
-    MIN_SELLER_REPUTATION
+    MIN_SELLER_REPUTATION, REQUIRED_BRANDS, 
+    BRAND_EXEMPT_KEYWORDS
 )
 
 VINTED_API = "https://www.vinted.co.uk/api/v2/catalog/items"
@@ -28,6 +29,11 @@ def fetch_listings(keyword):
     }
     try:
         response = session.get(VINTED_API, params=params)
+        if response.status_code == 403:
+            print("  ⚠️ Cookie expired — sending Telegram warning")
+            from telegram_bot import send_cookie_warning
+            send_cookie_warning()
+            return []
         if response.status_code != 200:
             print(f"  ⚠️ Bad status {response.status_code} for '{keyword}'")
             return []
@@ -39,6 +45,15 @@ def fetch_listings(keyword):
 
 def passes_filters(item):
     title = item.get("title", "").lower()
+
+    # Check brand whitelist
+    brand = item.get("brand_title", "").lower()
+    if not any(b in brand for b in REQUIRED_BRANDS):
+        return False, f"Brand not in whitelist: {brand}"
+    
+    brand_exempt = any(kw in title for kw in BRAND_EXEMPT_KEYWORDS)
+    if not brand_exempt and not any(b in brand for b in REQUIRED_BRANDS):
+        return False, f"Brand not in whitelist: {brand}"
 
     # Check condition
     condition = item.get("status", "").lower()
@@ -62,7 +77,6 @@ def format_item(item):
     title = item.get("title", "")
     price = float(item["price"]["amount"])
 
-    # Detect good signals
     signals = []
     combined = title.lower() + " " + item.get("description", "").lower()
     if item.get("user", {}).get("bundle_discount") is not None:

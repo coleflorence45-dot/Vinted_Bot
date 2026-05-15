@@ -5,6 +5,9 @@ from config import SEARCH_KEYWORDS, CHECK_INTERVAL_SECONDS
 from vinted import fetch_listings, format_item, get_session_cookie, passes_filters
 from telegram_bot import send_alert
 from tracker import load_seen, save_seen, is_new
+from bot_controls import start_bot_thread
+
+start_bot_thread()
 
 get_session_cookie()
 
