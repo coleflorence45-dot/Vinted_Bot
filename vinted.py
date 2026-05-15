@@ -3,7 +3,7 @@ from curl_cffi import requests as cffi_requests
 from config import (
     VINTED_COOKIE, MIN_PRICE, MAX_PRICE,
     GOOD_CONDITIONS, BAD_TITLE_KEYWORDS,
-    GOOD_SIGNALS, MIN_SELLER_REPUTATION
+    MIN_SELLER_REPUTATION
 )
 
 VINTED_API = "https://www.vinted.co.uk/api/v2/catalog/items"
@@ -39,22 +39,22 @@ def fetch_listings(keyword):
 
 def passes_filters(item):
     title = item.get("title", "").lower()
-    
-    # --- Check condition ---
+
+    # Check condition
     condition = item.get("status", "").lower()
     if not any(good in condition for good in GOOD_CONDITIONS):
         return False, f"Condition: {condition}"
 
-    # --- Check for bad words in title ---
+    # Check for bad words in title
     for bad_word in BAD_TITLE_KEYWORDS:
         if bad_word in title:
             return False, f"Bad keyword: '{bad_word}'"
 
-    # --- Check seller reputation ---
+    # Check seller reputation
     user = item.get("user", {})
     reputation = user.get("feedback_reputation", 1.0)
     if reputation is not None and float(reputation) < MIN_SELLER_REPUTATION:
-        return False, f"Seller reputation too low: {reputation}"
+        return False, f"Low reputation: {reputation}"
 
     return True, "OK"
 
@@ -62,14 +62,9 @@ def format_item(item):
     title = item.get("title", "")
     price = float(item["price"]["amount"])
 
-    # --- Detect good signals ---
+    # Detect good signals
     signals = []
-    title_lower = title.lower()
-    description = item.get("description", "").lower()
-    combined = title_lower + " " + description
-
-    if item.get("service_fee") == 0 or "free" in combined:
-        signals.append("📦 Free postage")
+    combined = title.lower() + " " + item.get("description", "").lower()
     if item.get("user", {}).get("bundle_discount") is not None:
         signals.append("🛍️ Bundle deals")
     if any(s in combined for s in ["bnwt", "brand new", "never worn", "unworn"]):
@@ -92,5 +87,4 @@ def format_item(item):
         "seller": seller_name,
         "seller_rep": seller_rep_pct,
         "signals": signals,
-        "photo": item.get("photo", {}).get("url", "")
     }
