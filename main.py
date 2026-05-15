@@ -15,11 +15,15 @@ def check_vinted():
     for keyword in SEARCH_KEYWORDS:
         items = fetch_listings(keyword, MAX_PRICE)
         for raw_item in items:
+            passed, reason = passes_filters(raw_item)
+            if not passed:
+                continue  # silently skip
             item = format_item(raw_item)
             if is_new(item["id"], seen_ids):
-                print(f"  ✅ New item found: {item['title']} — £{item['price']}")
+                print(f"  ✅ {item['title']} — £{item['price']:.2f}")
                 send_alert(item)
                 new_seen.add(str(item["id"]))
+                
 
     save_seen(new_seen)
     print("✅ Check complete.\n")
