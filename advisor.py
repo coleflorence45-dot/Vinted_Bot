@@ -62,6 +62,9 @@ def get_verdict(item: dict) -> dict:
     system = (
         "You are a practical secondhand dress resale advisor for a UK Vinted seller. "
         "Analyse the new listing vs history visually and by text. Only sold prices available. "
+        "When comparing images, focus ONLY on the dress itself — its silhouette, cut, fabric, "
+        "print, pattern and colour. Completely ignore backgrounds, wallpaper, furniture, "
+        "lighting or anything that is not the dress. "
         "Respond ONLY with compact valid JSON, no markdown:\n"
         '{"verdict":"BUY"|"SKIP"|"MAYBE","summary":"2 sentences","expected_sell":0,"expected_days":0,"tip":"one short tip"}'
     )
