@@ -44,7 +44,8 @@ def fetch_listings(keyword):
         return []
 
 def passes_filters(item):
-    title = item.get("title", "").lower()
+    title = (item.get("title", "") + " " + item.get("description", "")).lower()
+    
 
     # Check brand whitelist
     brand = item.get("brand_title", "").lower()

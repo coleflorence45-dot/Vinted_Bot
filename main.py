@@ -33,7 +33,7 @@ def check_vinted():
     for keyword in SEARCH_KEYWORDS:
         items = fetch_listings(keyword)
         for raw_item in items:
-            if not is_new(raw_item["id"], seen_ids):
+            if not is_new(raw_item["id"], seen_ids) or not is_new(raw_item["id"], new_seen):
                 continue
             new_seen.add(str(raw_item["id"]))
             passed, reason = passes_filters(raw_item)
