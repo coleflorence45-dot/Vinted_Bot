@@ -1,34 +1,75 @@
-import schedule
+# main.py
 import time
-from config import SEARCH_KEYWORDS, MAX_PRICE, CHECK_INTERVAL_MINUTES
-from vinted import fetch_listings, format_item, get_session_cookie
+import random
+from config import SEARCH_KEYWORDS, CHECK_INTERVAL_SECONDS
+from vinted import fetch_listings, format_item, get_session_cookie, passes_filters
 from telegram_bot import send_alert
 from tracker import load_seen, save_seen, is_new
+from bot_controls import start_bot_thread
 from advisor import get_verdict
 
+start_bot_thread()
 get_session_cookie()
+
+def seed_seen_items():
+    """First run - silently save all current listings, send no alerts"""
+    print("⏳ Seeding existing listings, no alerts will be sent...")
+    seen_ids = load_seen()
+    new_seen = set(seen_ids)
+    for keyword in SEARCH_KEYWORDS:
+        items = fetch_listings(keyword)
+        for raw_item in items:
+            new_seen.add(str(raw_item["id"]))
+        time.sleep(random.uniform(1, 3))
+    save_seen(new_seen)
+    print(f"✅ Seeded {len(new_seen)} existing items. Now watching for NEW listings...\n")
 
 def check_vinted():
     print("🔍 Checking Vinted...")
     seen_ids = load_seen()
     new_seen = set(seen_ids)
+    found = 0
 
     for keyword in SEARCH_KEYWORDS:
-        items = fetch_listings(keyword, MAX_PRICE)
+        items = fetch_listings(keyword)
         for raw_item in items:
+            if not is_new(raw_item["id"], seen_ids):
+                continue
+            new_seen.add(str(raw_item["id"]))
+
+            passed, reason = passes_filters(raw_item)
+            if not passed:
+                continue
+
             item = format_item(raw_item)
-            if is_new(item["id"], seen_ids):
-                print(f"  ✅ New item found: {item['title']} — £{item['price']}")
-                verdict = get_verdict(item)
-                send_alert(item, verdict)
-                new_seen.add(str(item["id"]))
+
+            # Get AI verdict
+            verdict = get_verdict(item)
+
+            # Don't alert on SKIP — only send BUY and MAYBE
+            if verdict.get("verdict") == "SKIP":
+                print(f"  🤖 SKIP: {item['title']} — not alerting")
+                continue
+
+            print(f"  ✅ {item['title']} — £{item['price']:.2f}")
+            if verdict:
+                print(f"     🤖 {verdict.get('verdict', '?')} — {verdict.get('summary', '')[:60]}")
+
+            send_alert(item, verdict)
+            found += 1
+
+        time.sleep(random.uniform(1, 3))
 
     save_seen(new_seen)
+    if found == 0:
+        print("  No new matching listings found.")
     print("✅ Check complete.\n")
 
-check_vinted()
-schedule.every(CHECK_INTERVAL_MINUTES).minutes.do(check_vinted)
+# Wipe seen list and seed on every startup
+open("seen_items.txt", "w").close()
+seed_seen_items()
+print(f"👀 Checking every {CHECK_INTERVAL_SECONDS} seconds...\n")
 
 while True:
-    schedule.run_pending()
-    time.sleep(30)
+    check_vinted()
+    time.sleep(CHECK_INTERVAL_SECONDS)

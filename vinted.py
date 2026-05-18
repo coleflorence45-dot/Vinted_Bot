@@ -3,12 +3,11 @@ from curl_cffi import requests as cffi_requests
 from config import (
     VINTED_COOKIE, MIN_PRICE, MAX_PRICE,
     GOOD_CONDITIONS, BAD_TITLE_KEYWORDS,
-    MIN_SELLER_REPUTATION, REQUIRED_BRANDS, 
+    MIN_SELLER_REPUTATION, REQUIRED_BRANDS,
     BRAND_EXEMPT_KEYWORDS
 )
 
 VINTED_API = "https://www.vinted.co.uk/api/v2/catalog/items"
-
 session = cffi_requests.Session(impersonate="chrome120")
 
 def get_session_cookie():
@@ -44,14 +43,10 @@ def fetch_listings(keyword):
         return []
 
 def passes_filters(item):
-    title = (item.get("title", "") + " " + item.get("description", "")).lower()
-    
+    title = item.get("title", "").lower()
 
     # Check brand whitelist
     brand = item.get("brand_title", "").lower()
-    if not any(b in brand for b in REQUIRED_BRANDS):
-        return False, f"Brand not in whitelist: {brand}"
-    
     brand_exempt = any(kw in title for kw in BRAND_EXEMPT_KEYWORDS)
     if not brand_exempt and not any(b in brand for b in REQUIRED_BRANDS):
         return False, f"Brand not in whitelist: {brand}"
@@ -91,6 +86,10 @@ def format_item(item):
     seller_rep = seller.get("feedback_reputation", "?")
     seller_rep_pct = f"{float(seller_rep)*100:.0f}%" if seller_rep != "?" else "?"
 
+    # Extract photo URL for image sending + AI analysis
+    photo_data = item.get("photo", {})
+    photo_url = photo_data.get("url", "") if photo_data else ""
+
     return {
         "id": item["id"],
         "title": title,
@@ -102,4 +101,5 @@ def format_item(item):
         "seller": seller_name,
         "seller_rep": seller_rep_pct,
         "signals": signals,
+        "photo": photo_url,
     }

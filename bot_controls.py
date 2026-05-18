@@ -22,17 +22,30 @@ def delete_message(message_id):
         json={"chat_id": TELEGRAM_CHAT_ID, "message_id": message_id}
     )
 
-def edit_message(message_id, text):
-    requests.post(
-        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/editMessageText",
-        json={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "message_id": message_id,
-            "text": text + "\n\n✅ Saved",
-            "parse_mode": "Markdown",
-            "reply_markup": {"inline_keyboard": []}
-        }
-    )
+def edit_message(message_id, text, is_photo=False):
+    if is_photo:
+        # Photo messages use editMessageCaption
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/editMessageCaption",
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "message_id": message_id,
+                "caption": text[:1024] + "\n\n✅ Saved",
+                "parse_mode": "Markdown",
+                "reply_markup": {"inline_keyboard": []}
+            }
+        )
+    else:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/editMessageText",
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "message_id": message_id,
+                "text": text + "\n\n✅ Saved",
+                "parse_mode": "Markdown",
+                "reply_markup": {"inline_keyboard": []}
+            }
+        )
 
 def answer_callback(callback_id):
     requests.post(
@@ -44,30 +57,31 @@ def poll_loop():
     global last_update_id
     while True:
         try:
-            # Check for button presses
             response = requests.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
                 params={"offset": last_update_id + 1, "timeout": 10},
                 timeout=15
             )
             data = response.json()
-
             for update in data.get("result", []):
                 last_update_id = update["update_id"]
                 callback = update.get("callback_query")
                 if callback:
                     msg_id = callback["message"]["message_id"]
-                    text = callback["message"].get("text", "")
+                    # Get caption for photo messages, text for regular
+                    text = callback["message"].get("caption") or callback["message"].get("text", "")
                     action = callback["data"]
                     answer_callback(callback["id"])
+
+                    msg_info = pending_messages.get(msg_id, {})
+                    is_photo = msg_info.get("is_photo", False)
 
                     if action == "delete":
                         delete_message(msg_id)
                         pending_messages.pop(msg_id, None)
                         print(f"  🗑️ Message {msg_id} deleted by user")
-
                     elif action == "keep":
-                        edit_message(msg_id, text)
+                        edit_message(msg_id, text, is_photo=is_photo)
                         pending_messages.pop(msg_id, None)
                         print(f"  ❤️ Message {msg_id} kept by user")
 
@@ -82,7 +96,6 @@ def poll_loop():
         except Exception as e:
             print(f"  ⚠️ Poll error: {e}")
             time.sleep(5)
-
         time.sleep(1)
 
 def start_bot_thread():

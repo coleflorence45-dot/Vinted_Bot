@@ -1,55 +1,76 @@
+# telegram_bot.py
 import requests
+import json
+from datetime import datetime
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+from bot_controls import pending_messages, get_keyboard
 
 VERDICT_EMOJI = {"BUY": "✅", "MAYBE": "🤔", "SKIP": "❌"}
 
-def send_alert(item: dict, verdict: dict = None):
-    signals_text = " ".join(item["signals"]) if item.get("signals") else ""
+def send_alert(item, verdict=None):
+    signals_text = "  ".join(item["signals"]) if item["signals"] else ""
 
-    caption = (
-        f"🛍️ *{item['title']}*\n"
-        f"💰 £{item['price']:.2f}\n"
-        f"👗 {item.get('brand', '?')} | Size: {item.get('size', '?')}\n"
-        f"⭐ Condition: {item.get('condition', '?')}\n"
-        f"👤 Seller: {item.get('seller', '?')} ({item.get('seller_rep', '?')} feedback)\n"
-    )
-
-    if signals_text:
-        caption += f"✅ {signals_text}\n"
-
+    # Verdict line
     if verdict and verdict.get("verdict"):
         v = verdict["verdict"]
         emoji = VERDICT_EMOJI.get(v, "❓")
-        caption += f"\n{emoji} *{v}*\n{verdict.get('summary', '')}\n"
-        if verdict.get("expected_sell"):
-            caption += (
-                f"Expect: £{verdict.get('expected_sell', '?')} · "
-                f"{verdict.get('expected_days', '?')}d\n"
-            )
-        if verdict.get("tip"):
-            caption += f"💡 {verdict['tip']}\n"
+        verdict_line = f"{emoji} *{v}*  ·  £{verdict.get('expected_sell', '?')} est.  ·  {verdict.get('expected_days', '?')}d\n"
+        tip_line = f"💡 _{verdict.get('tip', '')}_\n" if verdict.get("tip") else ""
+    else:
+        verdict_line = ""
+        tip_line = ""
 
-    caption += f"\n🔗 {item['url']}"
+    text = (
+        f"🛍️ *{item['title']}*  ·  £{item['price']:.2f}\n"
+        f"👗 {item['brand']}  ·  {item['size']}  ·  {item['condition']}\n"
+    )
+
+    if signals_text:
+        text += f"✅ {signals_text}\n"
+
+    text += f"\n{verdict_line}{tip_line}"
+    text += f"🔗 {item['url']}"
 
     photo_url = item.get("photo", "")
 
     if photo_url:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+        api_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
         payload = {
             "chat_id": TELEGRAM_CHAT_ID,
             "photo": photo_url,
-            "caption": caption,
-            "parse_mode": "Markdown"
+            "caption": text[:1024],
+            "parse_mode": "Markdown",
+            "reply_markup": json.dumps(get_keyboard())
         }
     else:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        api_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
             "chat_id": TELEGRAM_CHAT_ID,
-            "text": caption,
-            "parse_mode": "Markdown"
+            "text": text,
+            "parse_mode": "Markdown",
+            "reply_markup": json.dumps(get_keyboard())
         }
 
-    try:
-        requests.post(url, data=payload, timeout=10)
-    except Exception as e:
-        print(f"[telegram] Failed to send alert: {e}")
+    response = requests.post(api_url, json=payload)
+    data = response.json()
+
+    if data.get("ok"):
+        msg_id = data["result"]["message_id"]
+        pending_messages[msg_id] = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "sent_time": datetime.now(),
+            "is_photo": bool(photo_url)
+        }
+
+def send_cookie_warning():
+    api_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": (
+            "⚠️ *Vinted bot has stopped working* — cookies have likely expired.\n\n"
+            "Open vinted.co.uk in Chrome, press F12, go to Console, "
+            "type `document.cookie`, copy the result and update `config.py`."
+        ),
+        "parse_mode": "Markdown"
+    }
+    requests.post(api_url, data=payload)
