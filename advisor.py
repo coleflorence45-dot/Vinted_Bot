@@ -68,7 +68,7 @@ def get_verdict(item: dict) -> dict:
     fast_rejects = [
         "bodycon", "body con", "body-con", "straight", "shift",
         "pencil", "fitted", "denim", "cotton", "jersey", "knit",
-        "bandage", "tube", "sheath", "column"
+        "bandage", "tube", "sheath", "column", "size 20", "size 22", "size 24", "size 26", "size 28"
     ]
     if any(w in title_lower for w in fast_rejects):
         print(f"[advisor] Fast rejected: title contains banned style word")
@@ -169,7 +169,7 @@ def get_verdict(item: dict) -> dict:
     )
 
     try:
-        return call_claude(model, system, content, max_tokens=150)
+        return call_claude(model, system, content, max_tokens=300)
     except Exception as e:
         print(f"[advisor] Claude API error: {e}")
         return {}
